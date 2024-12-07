@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-app-green
+  namespace: green
+spec:
+  type: ClusterIP  # need to use LoadBalancer if external access is needed
+  selector:
+    app: my-app
+    env: green
+  ports:
+    - port: 80
+      targetPort: 80
+

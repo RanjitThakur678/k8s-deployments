@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-app-blue
+  namespace: blue
+spec:
+  type: ClusterIP  # need to use  LoadBalancer svc if external access is needed
+  selector:
+    app: my-app
+    env: blue
+  ports:
+    - port: 80
+      targetPort: 80
+

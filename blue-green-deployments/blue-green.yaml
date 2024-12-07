@@ -1,0 +1,57 @@
+name: Blue-Green Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      DEPLOYMENT_ENV:
+        description: 'Specify deployment environment'
+        required: true
+        default: 'blue'
+        options:
+          - blue
+          - green
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Build and Push Image
+        run: |
+          echo "Building Docker image..."
+          docker build -t myregistry.azurecr.io/my-app:${{ github.run_id }} .  ##using github.run_id method to update image tag with every run
+          echo "Pushing Docker image..."
+          echo "${{ secrets.ACR_PASSWORD }}" | docker login myregistry.azurecr.io -u "${{ secrets.ACR_USERNAME }}" --password-stdin
+          docker push myregistry.azurecr.io/my-app:${{ github.run_id }}
+
+      - name: Deploy
+        run: |
+          DEPLOYMENT_ENV=${{ github.event.inputs.DEPLOYMENT_ENV }}
+          echo "Deploying to $DEPLOYMENT_ENV environment..."
+          kubectl apply -f k8s/$DEPLOYMENT_ENV/deployment-$DEPLOYMENT_ENV.yaml
+          kubectl apply -f k8s/$DEPLOYMENT_ENV/service-$DEPLOYMENT_ENV.yaml
+
+      # - name: Run Tests   ## to test the deployment before routing the traffic to green server
+      #   run: |
+      #     DEPLOYMENT_ENV=${{ github.event.inputs.DEPLOYMENT_ENV }}
+      #     echo "Running tests in $DEPLOYMENT_ENV environment..."
+      #     kubectl -n $DEPLOYMENT_ENV exec -it <test-pod-name>  
+
+      - name: Switch Traffic
+        run: |
+          DEPLOYMENT_ENV=${{ github.event.inputs.DEPLOYMENT_ENV }}
+          echo "Switching traffic to $DEPLOYMENT_ENV environment..."
+          az network traffic-manager endpoint update --name myEndpoint --traffic-routing-method priority --target-resource-id <${DEPLOYMENT_ENV}-endpoint>
+
+      - name: Cleanup
+        run: |
+          OTHER_ENV=$(if [ "$DEPLOYMENT_ENV" == "blue" ]; then echo "green"; else echo "blue"; fi)
+          echo "Cleaning up $OTHER_ENV environment..."
+          kubectl -n $OTHER_ENV delete deployment my-app
+
+
+
+
+
